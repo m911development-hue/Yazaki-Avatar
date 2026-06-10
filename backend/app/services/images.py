@@ -1,25 +1,31 @@
 from app.services.scraper import scraper
-import re
 
 class ImageService:
     def __init__(self):
         self.scraped_images = []
         self.topic_keywords = {
-            "oculus": ["oculus", "quest", "rift", "vr headset", "meta quest"],
-            "vr_training": ["training", "simulation", "learning", "education", "virtual training"],
-            "metaverse": ["metaverse", "virtual world", "digital world", "virtual reality"],
-            "ar": ["augmented reality", "ar", "mixed reality", "mr"],
-            "projects": ["project", "portfolio", "case study", "work", "client"],
-            "services": ["service", "solution", "offering", "consulting", "development"],
-            "team": ["team", "staff", "people", "expert", "founder"],
-            "contact": ["contact", "reach", "touch", "location", "address"],
-            "about": ["about", "company", "who we are", "story", "mission"],
-            "gaming": ["game", "gaming", "esports", "interactive"],
+            "holobox": ["holobox", "holo box", "holographic box"],
+            "holofan": ["holofan", "holo fan", "holographic fan"],
+            "anamorphic": ["anamorphic", "3d billboard", "naked eye 3d"],
+            "ai_kiosk": ["ai kiosk", "kiosk", "interactive kiosk"],
+            "holocube": ["holocube", "holo cube"],
+            "vr": ["vr", "virtual reality", "oculus", "meta quest", "headset"],
+            "ar": ["ar", "augmented reality", "mixed reality"],
+            "virtual_tour": ["virtual tour", "360", "immersive tour"],
+            "metaverse": ["metaverse", "virtual world", "digital world"],
+            "training": ["training", "simulation", "learning", "education"],
+            "healthcare": ["healthcare", "medical", "hospital", "pharma"],
+            "gaming": ["game", "gaming", "esports"],
+            "projects": ["project", "portfolio", "case study", "client"],
+            "services": ["service", "solution", "offering"],
+            "animated_video": ["animated", "animation", "video"],
+            "about": ["about", "company", "team", "founder", "who we are"],
         }
 
-    def load_scraped_images(self):
+    def load_images(self):
         if not self.scraped_images and scraper.images_data:
             self.scraped_images = scraper.images_data
+            print(f"Loaded {len(self.scraped_images)} images")
 
     def detect_topic(self, query: str) -> str:
         query_lower = query.lower()
@@ -29,82 +35,77 @@ class ImageService:
                     return topic
         return "general"
 
-    def find_relevant_images(self, query: str, max_images: int = 3) -> list:
-        self.load_scraped_images()
+    def find_images(self, query: str, max_images: int = 3) -> list:
+        self.load_images()
 
         if not self.scraped_images:
             return []
 
         query_lower = query.lower()
-        scored_images = []
+        query_words = [w for w in query_lower.split() if len(w) > 2]
+        topic = self.detect_topic(query)
+        scored = []
 
         for image in self.scraped_images:
             score = 0
             alt_lower = image.get("alt", "").lower()
             page_lower = image.get("page", "").lower()
+            url_lower = image.get("url", "").lower()
 
-            # Score by alt text match
-            query_words = query_lower.split()
+            # Score by query words in alt text
             for word in query_words:
-                if len(word) > 3 and word in alt_lower:
+                if word in alt_lower:
+                    score += 5
+                if word in page_lower:
                     score += 3
-                if len(word) > 3 and word in page_lower:
-                    score += 1
+                if word in url_lower:
+                    score += 2
 
-            # Score by topic
-            topic = self.detect_topic(query)
+            # Score by topic keywords
             if topic != "general":
                 for keyword in self.topic_keywords[topic]:
                     if keyword in alt_lower:
-                        score += 2
+                        score += 4
                     if keyword in page_lower:
-                        score += 1
+                        score += 3
+                    if keyword in url_lower:
+                        score += 2
 
-            if score > 0:
-                scored_images.append({
+            # Boost images from relevant pages
+            if topic != "general" and topic.replace("_", "-") in page_lower:
+                score += 5
+
+            # Skip images with no alt text and low score
+            if score > 0 or (alt_lower and len(alt_lower) > 5):
+                scored.append({
                     "url": image["url"],
-                    "alt": image.get("alt", "Metaverse911 Image"),
+                    "alt": image.get("alt", "Metaverse911"),
                     "page": image.get("page", ""),
                     "score": score
                 })
 
         # Sort by score
-        scored_images.sort(key=lambda x: x["score"], reverse=True)
+        scored.sort(key=lambda x: x["score"], reverse=True)
 
-        # Return top images without score field
-        result = []
-        for img in scored_images[:max_images]:
-            result.append({
-                "url": img["url"],
-                "alt": img["alt"],
-                "page": img["page"]
-            })
-
-        return result
-
-    def get_fallback_images(self, topic: str) -> list:
-        # Return images from scraped data based on topic page URL
-        self.load_scraped_images()
-        fallback = []
-        for image in self.scraped_images[:10]:
-            page_lower = image.get("page", "").lower()
-            if topic in page_lower:
-                fallback.append({
-                    "url": image["url"],
-                    "alt": image.get("alt", "Metaverse911"),
-                    "page": image.get("page", "")
+        # Remove duplicates
+        seen_urls = set()
+        unique = []
+        for img in scored:
+            if img["url"] not in seen_urls:
+                seen_urls.add(img["url"])
+                unique.append({
+                    "url": img["url"],
+                    "alt": img["alt"],
+                    "page": img["page"]
                 })
-            if len(fallback) >= 3:
+            if len(unique) >= max_images:
                 break
-        return fallback
+
+        return unique
 
     def get_images_for_query(self, query: str) -> dict:
-        images = self.find_relevant_images(query)
+        images = self.find_images(query)
         topic = self.detect_topic(query)
-
-        if not images:
-            images = self.get_fallback_images(topic)
-
         return {
             "topic": topic,
             "images": images,

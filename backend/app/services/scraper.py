@@ -2,7 +2,11 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 import re
+import json
+import os
 from app.config import config
+
+IMAGES_CACHE_FILE = os.path.join(os.path.dirname(__file__), "images_cache.json")
 
 class MetaverseScraper:
     def __init__(self):
@@ -13,6 +17,26 @@ class MetaverseScraper:
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
+        # Load cached images on startup
+        self._load_images_cache()
+
+    def _load_images_cache(self):
+        if os.path.exists(IMAGES_CACHE_FILE):
+            try:
+                with open(IMAGES_CACHE_FILE, "r", encoding="utf-8") as f:
+                    self.images_data = json.load(f)
+                print(f"Loaded {len(self.images_data)} images from cache")
+            except Exception as e:
+                print(f"Could not load images cache: {e}")
+                self.images_data = []
+
+    def _save_images_cache(self):
+        try:
+            with open(IMAGES_CACHE_FILE, "w", encoding="utf-8") as f:
+                json.dump(self.images_data, f, ensure_ascii=False, indent=2)
+            print(f"Saved {len(self.images_data)} images to cache")
+        except Exception as e:
+            print(f"Could not save images cache: {e}")
 
     def is_valid_url(self, url):
         parsed = urlparse(url)
@@ -50,20 +74,16 @@ class MetaverseScraper:
             response.raise_for_status()
             soup = BeautifulSoup(response.text, "lxml")
 
-            # Remove unwanted tags
             for tag in soup(["script", "style", "nav", "footer", "head"]):
                 tag.decompose()
 
-            # Extract text
             title = soup.title.string if soup.title else ""
             body_text = soup.get_text(separator=" ")
             clean = self.clean_text(body_text)
 
-            # Extract images
             images = self.extract_images(soup, url)
             self.images_data.extend(images)
 
-            # Extract links
             links = []
             for a in soup.find_all("a", href=True):
                 full_url = urljoin(url, a["href"])
@@ -103,6 +123,10 @@ class MetaverseScraper:
 
         print(f"Total pages scraped: {len(self.pages_data)}")
         print(f"Total images found: {len(self.images_data)}")
+
+        # Save images to cache after crawling
+        self._save_images_cache()
+
         return self.pages_data, self.images_data
 
     def chunk_text(self, text, chunk_size=500, overlap=50):

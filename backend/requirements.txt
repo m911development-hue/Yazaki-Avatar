@@ -1,0 +1,16 @@
+fastapi==0.111.0
+uvicorn==0.30.1
+python-dotenv==1.0.1
+requests==2.32.3
+beautifulsoup4==4.12.3
+crawl4ai==0.2.77
+langchain==0.2.6
+langchain-community==0.2.6
+chromadb==0.5.3
+sentence-transformers==3.0.1
+httpx==0.27.0
+pydantic==2.7.4
+python-multipart==0.0.9
+aiohttp==3.9.5
+lxml==5.2.2
+Pillow==10.3.0
