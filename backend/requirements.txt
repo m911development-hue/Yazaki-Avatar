@@ -3,7 +3,7 @@ uvicorn==0.30.1
 python-dotenv==1.0.1
 requests==2.32.3
 beautifulsoup4==4.12.3
-crawl4ai==0.2.77
+crawl4ai==0.3.74
 langchain==0.2.6
 langchain-community==0.2.6
 chromadb==0.5.3
