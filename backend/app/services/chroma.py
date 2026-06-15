@@ -6,9 +6,7 @@ import uuid
 class ChromaService:
     def __init__(self):
         self.client = chromadb.PersistentClient(path=config.CHROMA_PERSIST_DIR)
-        self.embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name="all-MiniLM-L6-v2"
-        )
+        self.embedding_fn = embedding_functions.DefaultEmbeddingFunction()
         self.collection = self.client.get_or_create_collection(
             name=config.CHROMA_COLLECTION_NAME,
             embedding_function=self.embedding_fn,
