@@ -6,10 +6,10 @@ import uuid
 class ChromaService:
     def __init__(self):
         self.client = chromadb.PersistentClient(path=config.CHROMA_PERSIST_DIR)
-        self.embedding_fn = embedding_functions.DefaultEmbeddingFunction()
+        self.embedding_fn = embedding_functions.DefaultEmbeddingFunction()  # type: ignore[arg-type]
         self.collection = self.client.get_or_create_collection(
             name=config.CHROMA_COLLECTION_NAME,
-            embedding_function=self.embedding_fn,
+            embedding_function=self.embedding_fn,  # type: ignore[arg-type]
             metadata={"hnsw:space": "cosine"}
         )
 
@@ -35,7 +35,7 @@ class ChromaService:
         for i in range(0, len(documents), batch_size):
             self.collection.add(
                 documents=documents[i:i+batch_size],
-                metadatas=metadatas[i:i+batch_size],
+                metadatas=metadatas[i:i+batch_size],  # type: ignore[arg-type]
                 ids=ids[i:i+batch_size]
             )
 
@@ -52,9 +52,9 @@ class ChromaService:
             for i, doc in enumerate(results["documents"][0]):
                 chunks.append({
                     "text": doc,
-                    "source": results["metadatas"][0][i]["source"],
-                    "title": results["metadatas"][0][i]["title"],
-                    "distance": results["distances"][0][i] if results.get("distances") else 0
+                    "source": results["metadatas"][0][i]["source"],  # type: ignore[index]
+                    "title": results["metadatas"][0][i]["title"],    # type: ignore[index]
+                    "distance": results["distances"][0][i] if results.get("distances") else 0  # type: ignore[index]
                 })
 
         return chunks
@@ -63,15 +63,15 @@ class ChromaService:
         self.client.delete_collection(config.CHROMA_COLLECTION_NAME)
         self.collection = self.client.get_or_create_collection(
             name=config.CHROMA_COLLECTION_NAME,
-            embedding_function=self.embedding_fn,
+            embedding_function=self.embedding_fn,  # type: ignore[arg-type]
             metadata={"hnsw:space": "cosine"}
         )
         print("ChromaDB collection cleared")
 
     def get_count(self):
         try:
-        return self.collection.count()
-    except Exception:
-        return 0
+            return self.collection.count()  # ✅ Fixed: was missing indentation
+        except Exception:
+            return 0
 
 chroma_service = ChromaService()
