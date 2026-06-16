@@ -1,9 +1,34 @@
 services:
   - type: web
-    name: m911-chatbot
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    name: m911-copilot
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    region: singapore
+    plan: starter          # $7/mo — 512MB RAM (sentence-transformers ke liye zaroori)
+
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
+      - key: PORT
+        value: 8080
+      - key: APP_URL
+        sync: false        # Render dashboard mein manually set karo
+      - key: FRONTEND_URL
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false        # Secret — dashboard mein set karo
+      - key: OPENROUTER_MODEL
+        value: meta-llama/llama-3.1-8b-instruct:free
+      - key: OPENROUTER_FALLBACK_MODEL
+        value: mistralai/mistral-7b-instruct:free
+      - key: CHROMA_PERSIST_DIR
+        value: /data/chroma_store
+      - key: CHROMA_COLLECTION_NAME
+        value: m911_knowledge
+      - key: DEBUG
+        value: false
+      - key: MAX_PAGES
+        value: 50
+
+    disk:
+      name: chroma-data
+      mountPath: /data
+      sizeGB: 1

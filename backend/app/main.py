@@ -1,6 +1,6 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
@@ -10,7 +10,6 @@ import os
 from app.config import config
 from app.services.rag import rag_service
 from app.services.images import image_service
-from app.services.scraper import scraper
 
 app = FastAPI(
     title=config.APP_NAME,
@@ -27,27 +26,23 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# Static files — images serve karne ke liye
+# Static files
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_dir, exist_ok=True)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
-# ── Startup Event ──────────────────────────────────────────  ← YE YAHAN ADD KARO
+
+# ── Startup ────────────────────────────────────────────────
 @app.on_event("startup")
 async def startup_event():
-    if rag_service.chroma.get_count() == 0:
-        await rag_service.refresh_knowledge_base()
-# ── Request Models ──────────────────────────────────────────
+    count = rag_service.chroma.get_count()
+    print(f"ChromaDB has {count} chunks on startup")
+
+# ── Request Models ─────────────────────────────────────────
 class ChatRequest(BaseModel):
     question: str
     conversation_history: Optional[list] = []
 
-class ScrapeRequest(BaseModel):
-    max_pages: Optional[int] = 50
-
-# ── In-memory conversation store ────────────────────────────
-conversation_store = {}
-
-# ── Routes ──────────────────────────────────────────────────
+# ── Routes ─────────────────────────────────────────────────
 
 @app.get("/health")
 async def health():
@@ -91,34 +86,35 @@ async def related_image(query: str):
     result = image_service.get_images_for_query(query)
     return result
 
-@app.get("/conversation-history")
-async def conversation_history(session_id: Optional[str] = "default"):
-    return {
-        "session_id": session_id,
-        "history": conversation_store.get(session_id, [])
-    }
-
-@app.post("/scrape-website")
-async def scrape_website(request: ScrapeRequest):
+@app.post("/upload-pdf")
+async def upload_pdf(file: UploadFile = File(...)):
+    """PDF upload karke knowledge base mein add karo"""
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Sirf PDF files allowed hain")
     try:
-        pages, images = scraper.crawl(max_pages=request.max_pages)
-        chunks = scraper.get_chunks()
-        return {
-            "status": "success",
-            "pages_scraped": len(pages),
-            "images_found": len(images),
-            "chunks_generated": len(chunks)
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/refresh-knowledge-base")
-async def refresh_knowledge_base():
-    try:
-        result = await rag_service.refresh_knowledge_base()
+        result = await rag_service.add_pdf(file)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.delete("/clear-knowledge-base")
+async def clear_knowledge_base():
+    try:
+        rag_service.chroma.delete_all()
+        return {"status": "success", "message": "Knowledge base cleared"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ── Frontend Serve (production) ────────────────────────────
+frontend_dist = os.path.join(os.path.dirname(__file__), "static", "frontend")
+if os.path.exists(frontend_dist):
+    assets_dir = os.path.join(frontend_dist, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        return FileResponse(os.path.join(frontend_dist, "index.html"))
+
 if __name__ == "__main__":
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=config.DEBUG)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8080, reload=config.DEBUG)

@@ -1,11 +1,11 @@
 from app.services.chroma import chroma_service
-from app.services.openrouter_service import openrouter_service   # ← changed
-
+from app.services.openrouter_service import openrouter_service
+import uuid
 
 class RAGService:
     def __init__(self):
         self.chroma = chroma_service
-        self.llm = openrouter_service                            # ← changed
+        self.llm = openrouter_service
         self.min_chunks = 1
         self.top_k = 3
 
@@ -26,7 +26,6 @@ class RAGService:
         return best_distance < threshold
 
     async def query(self, question: str) -> dict:
-        # Step 1: Search ChromaDB
         chunks = self.chroma.search(question, top_k=self.top_k)
 
         print(f"Chunks found: {len(chunks) if chunks else 0}")
@@ -40,7 +39,6 @@ class RAGService:
                 "chunks_found": 0
             }
 
-        # Step 2: Check relevance — threshold raised to 0.85 so more results pass
         if not self.is_relevant(chunks):
             return {
                 "answer": "I couldn't find closely matching information. Please try rephrasing your question.",
@@ -48,13 +46,8 @@ class RAGService:
                 "chunks_found": len(chunks)
             }
 
-        # Step 3: Build context
         context = self.build_context(chunks)
-
-        # Step 4: Generate answer via OpenRouter  ← changed comment only
         answer = await self.llm.generate_answer(question, context)
-
-        # Step 5: Unique sources
         sources = list({c["source"] for c in chunks})
 
         return {
@@ -63,27 +56,46 @@ class RAGService:
             "chunks_found": len(chunks)
         }
 
-    async def refresh_knowledge_base(self) -> dict:
-        from app.services.scraper import scraper
+    async def add_pdf(self, file) -> dict:
+        """PDF file se chunks banao aur ChromaDB mein insert karo"""
+        import io
+        try:
+            from pypdf import PdfReader
+        except ImportError:
+            raise Exception("pypdf install karo: pip install pypdf")
 
-        print("Starting knowledge base refresh...")
+        contents = await file.read()
+        pdf = PdfReader(io.BytesIO(contents))
 
-        pages, images = scraper.crawl()
-        if not pages:
-            return {"status": "error", "message": "No pages scraped"}
+        chunks = []
+        for page_num, page in enumerate(pdf.pages):
+            text = page.extract_text() or ""
+            text = text.strip()
+            if len(text) < 50:
+                continue
 
-        chunks = scraper.get_chunks()
+            # Chunk into 500-word pieces
+            words = text.split()
+            for i in range(0, len(words), 450):
+                chunk_text = " ".join(words[i:i+500])
+                if len(chunk_text) > 100:
+                    chunks.append({
+                        "text": chunk_text,
+                        "source": f"PDF: {file.filename} (page {page_num+1})",
+                        "title": file.filename,
+                        "chunk_id": str(uuid.uuid4())
+                    })
+
         if not chunks:
-            return {"status": "error", "message": "No chunks generated"}
+            return {"status": "error", "message": "PDF mein koi readable text nahi mila"}
 
-        self.chroma.delete_all()
         self.chroma.insert_chunks(chunks)
 
         return {
             "status": "success",
-            "pages_scraped": len(pages),
-            "chunks_inserted": len(chunks),
-            "images_found": len(images)
+            "filename": file.filename,
+            "pages": len(pdf.pages),
+            "chunks_inserted": len(chunks)
         }
 
 
