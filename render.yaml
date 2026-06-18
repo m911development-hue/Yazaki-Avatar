@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: m911-copilot
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    region: singapore
+    plan: starter
+
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: APP_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        value: meta-llama/llama-3.1-8b-instruct:free
+      - key: OPENROUTER_FALLBACK_MODEL
+        value: mistralai/mistral-7b-instruct:free
+      - key: CHROMA_PERSIST_DIR
+        value: /data/chroma_store
+      - key: CHROMA_COLLECTION_NAME
+        value: m911_knowledge
+      - key: DEBUG
+        value: false
+      - key: MAX_PAGES
+        value: 50
+
+    disk:
+      name: chroma-data
+      mountPath: /data
+      sizeGB: 1
