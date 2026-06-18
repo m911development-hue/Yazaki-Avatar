@@ -81,7 +81,7 @@ class RAGService:
         pdf_path = os.path.join(
             os.path.dirname(__file__),   # /app/app/services/
             "..", "..", "data",           # /app/data/
-            "yazaki_travel_policy.pdf"   # ← YOUR PDF FILENAME HERE
+            "domestic_policy.pdf"   # ← YOUR PDF FILENAME HERE
         )
         pdf_path = os.path.abspath(pdf_path)
 
