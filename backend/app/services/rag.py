@@ -1,6 +1,8 @@
 from app.services.chroma import chroma_service
 from app.services.openrouter_service import openrouter_service
 import uuid
+import io
+import os
 
 class RAGService:
     def __init__(self):
@@ -42,20 +44,18 @@ class RAGService:
             "chunks_found": len(chunks)
         }
 
-    async def add_pdf(self, file) -> dict:
-        import io
+    def _pdf_to_chunks(self, pdf_bytes: bytes, filename: str) -> list:
+        """Shared chunking logic for both upload and auto-ingest."""
         try:
             from pypdf import PdfReader
         except ImportError:
-            raise Exception("pypdf install karo: pip install pypdf")
+            raise Exception("pypdf not installed: pip install pypdf")
 
-        contents = await file.read()
-        pdf = PdfReader(io.BytesIO(contents))
-
+        pdf = PdfReader(io.BytesIO(pdf_bytes))
         chunks = []
+
         for page_num, page in enumerate(pdf.pages):
-            text = page.extract_text() or ""
-            text = text.strip()
+            text = (page.extract_text() or "").strip()
             if len(text) < 50:
                 continue
 
@@ -65,20 +65,65 @@ class RAGService:
                 if len(chunk_text) > 100:
                     chunks.append({
                         "text": chunk_text,
-                        "source": f"PDF: {file.filename} (page {page_num+1})",
-                        "title": file.filename,
+                        "source": f"PDF: {filename} (page {page_num+1})",
+                        "title": filename,
                         "chunk_id": str(uuid.uuid4())
                     })
 
+        return chunks
+
+    async def ingest_default_pdf(self):
+        """
+        Auto-ingest the default PDF on startup if ChromaDB is empty.
+        PDF must be present at this path inside the Docker container.
+        """
+        # ── Change this path if your PDF filename is different ──
+        pdf_path = os.path.join(
+            os.path.dirname(__file__),   # /app/app/services/
+            "..", "..", "data",           # /app/data/
+            "yazaki_travel_policy.pdf"   # ← YOUR PDF FILENAME HERE
+        )
+        pdf_path = os.path.abspath(pdf_path)
+
+        if not os.path.exists(pdf_path):
+            print(f"[RAG] Default PDF not found at: {pdf_path}")
+            print("[RAG] Skipping auto-ingest. Upload PDF manually via /upload-pdf")
+            return
+
+        print(f"[RAG] Ingesting: {pdf_path}")
+        with open(pdf_path, "rb") as f:
+            pdf_bytes = f.read()
+
+        filename = os.path.basename(pdf_path)
+        chunks = self._pdf_to_chunks(pdf_bytes, filename)
+
         if not chunks:
-            return {"status": "error", "message": "No readable text found in the knowledge base."}
+            print("[RAG] No readable text found in PDF.")
+            return
 
         self.chroma.insert_chunks(chunks)
+        print(f"[RAG] Ingested {len(chunks)} chunks from {filename}")
+
+    async def add_pdf(self, file) -> dict:
+        """Handle PDF uploads via /upload-pdf endpoint."""
+        contents = await file.read()
+        chunks = self._pdf_to_chunks(contents, file.filename)
+
+        if not chunks:
+            return {"status": "error", "message": "No readable text found in PDF."}
+
+        self.chroma.insert_chunks(chunks)
+
+        try:
+            from pypdf import PdfReader
+            page_count = len(PdfReader(io.BytesIO(contents)).pages)
+        except Exception:
+            page_count = 0
 
         return {
             "status": "success",
             "filename": file.filename,
-            "pages": len(pdf.pages),
+            "pages": page_count,
             "chunks_inserted": len(chunks)
         }
 

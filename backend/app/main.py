@@ -25,7 +25,7 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# Static files
+# Static files (backend /static folder)
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_dir, exist_ok=True)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
@@ -34,7 +34,11 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 @app.on_event("startup")
 async def startup_event():
     count = rag_service.chroma.get_count()
-    print(f"ChromaDB has {count} chunks on startup")
+    print(f"[Startup] ChromaDB has {count} chunks")
+    if count == 0:
+        print("[Startup] ChromaDB empty — auto-ingesting default PDF...")
+        await rag_service.ingest_default_pdf()
+        print(f"[Startup] Done. Chunks now: {rag_service.chroma.get_count()}")
 
 # ── Request Models ─────────────────────────────────────────
 class ChatRequest(BaseModel):
@@ -64,7 +68,6 @@ async def chat(request: ChatRequest):
             raise HTTPException(status_code=400, detail="Invalid input detected")
 
     result = await rag_service.query(question)
-
     return {
         "answer": result["answer"],
         "sources": result["sources"],
@@ -102,6 +105,11 @@ if os.path.exists(frontend_dist):
 
     @app.get("/{full_path:path}")
     async def serve_frontend(full_path: str):
+        # Serve real files (ai-avatar.png, favicon.ico, etc.) directly
+        requested = os.path.join(frontend_dist, full_path)
+        if full_path and os.path.isfile(requested):
+            return FileResponse(requested)
+        # Everything else → index.html (React client-side routing)
         return FileResponse(os.path.join(frontend_dist, "index.html"))
 
 if __name__ == "__main__":

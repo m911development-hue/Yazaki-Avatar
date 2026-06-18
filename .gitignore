@@ -31,7 +31,7 @@ ENV/
 .python-version
 
 # ── ChromaDB / Vector Store ───────────────────────────────────
-backend/data/
+backend/data/chroma_store/
 data/chroma_store/
 *.chroma
 chroma.sqlite3

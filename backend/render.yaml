@@ -2,7 +2,7 @@ services:
   - type: web
     name: m911-copilot
     runtime: docker
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: ./backend/Dockerfile
     region: singapore
     plan: starter          # $7/mo — 512MB RAM (sentence-transformers ke liye zaroori)
 
