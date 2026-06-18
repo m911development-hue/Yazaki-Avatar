@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
@@ -45,6 +45,9 @@ class ChatRequest(BaseModel):
     question: str
     conversation_history: Optional[list] = []
 
+class TTSRequest(BaseModel):
+    text: str
+
 # ── Routes ─────────────────────────────────────────────────
 
 @app.get("/health")
@@ -77,6 +80,17 @@ async def chat(request: ChatRequest):
 @app.post("/voice-query")
 async def voice_query(request: ChatRequest):
     return await chat(request)
+
+@app.post("/tts")
+async def tts(request: TTSRequest):
+    if not request.text or not request.text.strip():
+        raise HTTPException(status_code=400, detail="Text cannot be empty")
+    try:
+        from app.services.tts import synthesize
+        audio_bytes = synthesize(request.text.strip())
+        return Response(content=audio_bytes, media_type="audio/wav")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)}")
 
 @app.post("/upload-pdf")
 async def upload_pdf(file: UploadFile = File(...)):

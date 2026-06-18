@@ -8,7 +8,7 @@ RUN npm run build
 
 FROM python:3.11-slim
 
-RUN apt-get update && apt-get install -y gcc g++ curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y gcc g++ curl libsndfile1 && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -16,6 +16,13 @@ COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+
+# Download Piper prabhat (Hindi Indian) voice model
+RUN mkdir -p /app/voices && \
+    curl -L "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/hi/hi_IN/prabhat/medium/hi_IN-prabhat-medium.onnx" \
+         -o /app/voices/hi_IN-prabhat-medium.onnx && \
+    curl -L "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/hi/hi_IN/prabhat/medium/hi_IN-prabhat-medium.onnx.json" \
+         -o /app/voices/hi_IN-prabhat-medium.onnx.json
 
 COPY backend/ .
 

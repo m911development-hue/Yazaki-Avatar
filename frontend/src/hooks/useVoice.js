@@ -25,26 +25,12 @@ export function useVoice() {
 
   const recognitionRef = useRef(null)
   const isListeningRef = useRef(false)
-  const synthRef = useRef(null)
+  const audioRef = useRef(null)
 
-  // Initialize Speech Synthesis
+  // Log TTS backend availability on mount
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      synthRef.current = window.speechSynthesis
-      console.log('Speech Synthesis: Initialized successfully.')
-      
-      const checkVoices = () => {
-        const voices = window.speechSynthesis.getVoices()
-        console.log(`Speech Synthesis: ${voices.length} voices available.`)
-      }
-      
-      checkVoices()
-      if (window.speechSynthesis.onvoiceschanged !== undefined) {
-        window.speechSynthesis.onvoiceschanged = checkVoices
-      }
-    } else {
-      console.warn('Speech Synthesis: Not supported in this browser.')
-    }
+    console.log('Speech Synthesis: Initialized successfully.')
+    console.log('Speech Synthesis: Using Piper TTS (prabhat Indian voice)')
   }, [])
 
   // Detect available microphones
@@ -276,8 +262,9 @@ export function useVoice() {
     setVoiceError(null)
 
     // Stop speaking if playing
-    if (synthRef.current && synthRef.current.speaking) {
-      synthRef.current.cancel()
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
       setIsSpeaking(false)
     }
 
@@ -318,58 +305,62 @@ export function useVoice() {
     }
   }, [])
 
-  // Speak AI Response
-  const speak = useCallback((text) => {
-    if (!synthRef.current) {
-      console.warn('Speech Synthesis: Not supported, cannot speak response.')
-      return
-    }
+  // Speak AI Response via Piper TTS backend
+  const speak = useCallback(async (text) => {
     if (!speechEnabled) return
 
+    // Stop any currently playing audio
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
+
+    const plainText = text.replace(/<[^>]*>/g, '').replace(/[*#]/g, '').trim()
+    if (!plainText) return
+
     try {
-      synthRef.current.cancel()
+      console.log('Speech Synthesis: Started speaking')
+      setIsSpeaking(true)
 
-      // Clean HTML tags and markdown before reading
-      const plainText = text.replace(/<[^>]*>/g, '').replace(/[*#]/g, '')
+      const res = await fetch('/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: plainText }),
+      })
 
-      const utterance = new SpeechSynthesisUtterance(plainText)
-      utterance.rate = 1.0
-      utterance.pitch = 1.0
-      utterance.volume = 1.0
+      if (!res.ok) throw new Error(`TTS request failed: ${res.status}`)
 
-      // Match voice language to selected language
-      const voices = synthRef.current.getVoices()
-      const prefix = selectedLanguage.split('-')[0]
-      const langVoice = voices.find((v) => v.lang.toLowerCase().startsWith(prefix.toLowerCase()))
-      if (langVoice) {
-        utterance.voice = langVoice
-      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audioRef.current = audio
 
-      utterance.onstart = () => {
-        console.log('Speech Synthesis: Started speaking')
-        setIsSpeaking(true)
-      }
-      utterance.onend = () => {
+      audio.onended = () => {
         console.log('Speech Synthesis: Finished speaking')
         setIsSpeaking(false)
+        URL.revokeObjectURL(url)
+        audioRef.current = null
       }
-      utterance.onerror = (err) => {
+      audio.onerror = (err) => {
         console.error('Speech Synthesis: onerror fired', err)
         setIsSpeaking(false)
+        URL.revokeObjectURL(url)
+        audioRef.current = null
       }
 
-      synthRef.current.speak(utterance)
+      await audio.play()
     } catch (err) {
       console.error('Speech Synthesis: Failed to speak:', err)
       setIsSpeaking(false)
     }
-  }, [speechEnabled, selectedLanguage])
+  }, [speechEnabled])
 
   // Stop speaking
   const stopSpeaking = useCallback(() => {
-    if (synthRef.current) {
+    if (audioRef.current) {
       console.log('Speech Synthesis: calling cancel()')
-      synthRef.current.cancel()
+      audioRef.current.pause()
+      audioRef.current = null
     }
     setIsSpeaking(false)
   }, [])
