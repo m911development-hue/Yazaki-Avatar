@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback } from 'react'
 import axios from 'axios'
 
 export const ChatContext = createContext()
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_URL = import.meta.env.VITE_API_URL || ''
 
 export function ChatProvider({ children }) {
   const [messages, setMessages] = useState([])  // No localStorage — fresh every session
