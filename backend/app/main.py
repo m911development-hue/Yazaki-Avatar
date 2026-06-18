@@ -9,11 +9,10 @@ import os
 
 from app.config import config
 from app.services.rag import rag_service
-from app.services.images import image_service
 
 app = FastAPI(
     title=config.APP_NAME,
-    description="AI-Powered Voice Knowledge Assistant for Metaverse911",
+    description="AI-Powered Voice Knowledge Assistant for Yazaki India",
     version="1.0.0"
 )
 
@@ -65,13 +64,10 @@ async def chat(request: ChatRequest):
             raise HTTPException(status_code=400, detail="Invalid input detected")
 
     result = await rag_service.query(question)
-    image_result = image_service.get_images_for_query(question)
 
     return {
         "answer": result["answer"],
         "sources": result["sources"],
-        "images": image_result["images"],
-        "topic": image_result["topic"],
         "chunks_found": result["chunks_found"]
     }
 
@@ -79,18 +75,10 @@ async def chat(request: ChatRequest):
 async def voice_query(request: ChatRequest):
     return await chat(request)
 
-@app.get("/related-image")
-async def related_image(query: str):
-    if not query:
-        raise HTTPException(status_code=400, detail="Query cannot be empty")
-    result = image_service.get_images_for_query(query)
-    return result
-
 @app.post("/upload-pdf")
 async def upload_pdf(file: UploadFile = File(...)):
-    """PDF upload karke knowledge base mein add karo"""
     if not file.filename.endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Sirf PDF files allowed hain")
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
     try:
         result = await rag_service.add_pdf(file)
         return result

@@ -1,27 +1,15 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { createContext, useContext, useState, useCallback } from 'react'
 import axios from 'axios'
 
 export const ChatContext = createContext()
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-function loadHistory() {
-  try {
-    const saved = localStorage.getItem('m911_chat_history')
-    return saved ? JSON.parse(saved) : []
-  } catch { return [] }
-}
-
 export function ChatProvider({ children }) {
-  const [messages, setMessages]   = useState(loadHistory)
-  const [loading, setLoading]     = useState(false)
-  const [images, setImages]       = useState([])
-  const [topic, setTopic]         = useState('')
-  const [sources, setSources]     = useState([])
-
-  useEffect(() => {
-    try { localStorage.setItem('m911_chat_history', JSON.stringify(messages)) }
-    catch {}
-  }, [messages])
+  const [messages, setMessages] = useState([])  // No localStorage — fresh every session
+  const [loading, setLoading]   = useState(false)
+  const [images, setImages]     = useState([])
+  const [topic, setTopic]       = useState('')
+  const [sources, setSources]   = useState([])
 
   const sendMessage = useCallback(async (question) => {
     if (!question.trim()) return
@@ -43,8 +31,6 @@ export function ChatProvider({ children }) {
       const res = await axios.post(`${API_URL}/chat`, { question })
       const data = res.data
 
-      console.log('FULL DATA:', data) // temporary debug
-
       const botMsg = {
         id: Date.now() + 1,
         role: 'assistant',
@@ -56,7 +42,6 @@ export function ChatProvider({ children }) {
       setSources(data.sources || [])
       setTopic(data.topic || '')
 
-      // Images directly from /chat response
       if (data.images && data.images.length > 0) {
         setImages(data.images)
       }
@@ -80,7 +65,6 @@ export function ChatProvider({ children }) {
     setImages([])
     setSources([])
     setTopic('')
-    try { localStorage.removeItem('m911_chat_history') } catch {}
   }, [])
 
   return (

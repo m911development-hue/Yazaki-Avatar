@@ -6,7 +6,6 @@ class RAGService:
     def __init__(self):
         self.chroma = chroma_service
         self.llm = openrouter_service
-        self.min_chunks = 1
         self.top_k = 5
 
     def build_context(self, chunks: list) -> str:
@@ -19,12 +18,6 @@ class RAGService:
             )
         return "\n\n---\n\n".join(context_parts)
 
-    def is_relevant(self, chunks: list, threshold: float = 1.0) -> bool:
-        if not chunks:
-            return False
-        best_distance = min(c.get("distance", 1.0) for c in chunks)
-        return best_distance < threshold
-
     async def query(self, question: str) -> dict:
         chunks = self.chroma.search(question, top_k=self.top_k)
 
@@ -34,16 +27,9 @@ class RAGService:
 
         if not chunks:
             return {
-                "answer": "I'm sorry, I couldn't find relevant information in the Domestic Travel Policy. Please try asking something related to travel entitlements, lodging, boarding, per diem, or reimbursement policies.",
+                "answer": "I'm sorry, I couldn't find relevant information in the Domestic Travel Policy. Please contact the HR department for assistance.",
                 "sources": [],
                 "chunks_found": 0
-            }
-
-        if not self.is_relevant(chunks):
-            return {
-                "answer": "I'm sorry, your question doesn't seem to be covered in the Domestic Travel Policy document. You can ask me about travel modes, lodging limits, per diem allowances, reimbursement rules, or GST guidelines.",
-                "sources": [],
-                "chunks_found": len(chunks)
             }
 
         context = self.build_context(chunks)
@@ -85,7 +71,7 @@ class RAGService:
                     })
 
         if not chunks:
-           return {"status": "error", "message": "No readable text found in the knowledge base."}
+            return {"status": "error", "message": "No readable text found in the knowledge base."}
 
         self.chroma.insert_chunks(chunks)
 
