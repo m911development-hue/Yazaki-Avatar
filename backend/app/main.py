@@ -9,6 +9,7 @@ import os
 
 from app.config import config
 from app.services.rag import rag_service
+from app.services.piper_service import generate_speech
 
 app = FastAPI(
     title=config.APP_NAME,
@@ -19,34 +20,41 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[config.FRONTEND_URL, "http://localhost:5173", "http://localhost:3000"],
+    allow_origins=[
+        config.FRONTEND_URL,
+        "http://localhost:5173",
+        "http://localhost:3000"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
 )
 
-# Static files (backend /static folder)
+# Static files
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_dir, exist_ok=True)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-# ── Startup ────────────────────────────────────────────────
+# Startup
 @app.on_event("startup")
 async def startup_event():
     count = rag_service.chroma.get_count()
     print(f"[Startup] ChromaDB has {count} chunks")
+
     if count == 0:
         print("[Startup] ChromaDB empty — auto-ingesting default PDF...")
         await rag_service.ingest_default_pdf()
         print(f"[Startup] Done. Chunks now: {rag_service.chroma.get_count()}")
 
-# ── Request Models ─────────────────────────────────────────
+# Request Models
 class ChatRequest(BaseModel):
     question: str
     conversation_history: Optional[list] = []
 
-# ── Routes ─────────────────────────────────────────────────
+class TTSRequest(BaseModel):
+    text: str
 
+# Health Check
 @app.get("/health")
 async def health():
     return {
@@ -55,62 +63,146 @@ async def health():
         "chunks_in_db": rag_service.chroma.get_count()
     }
 
+# Chat Endpoint
 @app.post("/chat")
 async def chat(request: ChatRequest):
     if not request.question or not request.question.strip():
-        raise HTTPException(status_code=400, detail="Question cannot be empty")
+        raise HTTPException(
+            status_code=400,
+            detail="Question cannot be empty"
+        )
 
     question = request.question.strip()
 
-    blocked = ["ignore previous", "forget instructions", "system prompt", "jailbreak", "act as"]
+    blocked = [
+        "ignore previous",
+        "forget instructions",
+        "system prompt",
+        "jailbreak",
+        "act as"
+    ]
+
     for phrase in blocked:
         if phrase in question.lower():
-            raise HTTPException(status_code=400, detail="Invalid input detected")
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid input detected"
+            )
 
     result = await rag_service.query(question)
+
     return {
         "answer": result["answer"],
         "sources": result["sources"],
         "chunks_found": result["chunks_found"]
     }
 
+# Voice Query
 @app.post("/voice-query")
 async def voice_query(request: ChatRequest):
     return await chat(request)
 
+# Piper TTS Endpoint
+@app.post("/tts")
+async def tts(request: TTSRequest):
+
+    if not request.text.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Text cannot be empty"
+        )
+
+    try:
+        audio_path = generate_speech(request.text)
+
+        return FileResponse(
+            path=audio_path,
+            media_type="audio/wav",
+            filename="speech.wav"
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
+# Upload PDF
 @app.post("/upload-pdf")
 async def upload_pdf(file: UploadFile = File(...)):
     if not file.filename.endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF files are allowed"
+        )
+
     try:
         result = await rag_service.add_pdf(file)
         return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
+# Clear Knowledge Base
 @app.delete("/clear-knowledge-base")
 async def clear_knowledge_base():
     try:
         rag_service.chroma.delete_all()
-        return {"status": "success", "message": "Knowledge base cleared"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
-# ── Frontend Serve (production) ────────────────────────────
-frontend_dist = os.path.join(os.path.dirname(__file__), "static", "frontend")
+        return {
+            "status": "success",
+            "message": "Knowledge base cleared"
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
+# Frontend Serve (Production)
+frontend_dist = os.path.join(
+    os.path.dirname(__file__),
+    "static",
+    "frontend"
+)
+
 if os.path.exists(frontend_dist):
+
     assets_dir = os.path.join(frontend_dist, "assets")
+
     if os.path.exists(assets_dir):
-        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+        app.mount(
+            "/assets",
+            StaticFiles(directory=assets_dir),
+            name="assets"
+        )
 
     @app.get("/{full_path:path}")
     async def serve_frontend(full_path: str):
-        # Serve real files (ai-avatar.png, favicon.ico, etc.) directly
-        requested = os.path.join(frontend_dist, full_path)
+
+        requested = os.path.join(
+            frontend_dist,
+            full_path
+        )
+
         if full_path and os.path.isfile(requested):
             return FileResponse(requested)
-        # Everything else → index.html (React client-side routing)
-        return FileResponse(os.path.join(frontend_dist, "index.html"))
+
+        return FileResponse(
+            os.path.join(
+                frontend_dist,
+                "index.html"
+            )
+        )
 
 if __name__ == "__main__":
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8080, reload=config.DEBUG)
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=8080,
+        reload=config.DEBUG
+    )

@@ -26,7 +26,10 @@ export function useVoice() {
   const recognitionRef = useRef(null)
   const isListeningRef = useRef(false)
   const synthRef = useRef(null)
+const audioRef = useRef(null)
 
+const API_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:8000"
   // Initialize Speech Synthesis
   useEffect(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
@@ -276,8 +279,9 @@ export function useVoice() {
     setVoiceError(null)
 
     // Stop speaking if playing
-    if (synthRef.current && synthRef.current.speaking) {
-      synthRef.current.cancel()
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
       setIsSpeaking(false)
     }
 
@@ -318,58 +322,55 @@ export function useVoice() {
     }
   }, [])
 
-  // Speak AI Response
-  const speak = useCallback((text) => {
-    if (!synthRef.current) {
-      console.warn('Speech Synthesis: Not supported, cannot speak response.')
-      return
-    }
+  // Speak AI Response via Piper TTS backend (Prabhat voice)
+  const speak = useCallback(async (text) => {
     if (!speechEnabled) return
 
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
+
+    const plainText = text.replace(/<[^>]*>/g, '').replace(/[*#]/g, '')
+    setIsSpeaking(true)
+
     try {
-      synthRef.current.cancel()
+      const response = await fetch(`${API_URL}/tts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: plainText }),
+      })
 
-      // Clean HTML tags and markdown before reading
-      const plainText = text.replace(/<[^>]*>/g, '').replace(/[*#]/g, '')
+      if (!response.ok) throw new Error(`TTS request failed: ${response.status}`)
 
-      const utterance = new SpeechSynthesisUtterance(plainText)
-      utterance.rate = 1.0
-      utterance.pitch = 1.0
-      utterance.volume = 1.0
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audioRef.current = audio
 
-      // Match voice language to selected language
-      const voices = synthRef.current.getVoices()
-      const prefix = selectedLanguage.split('-')[0]
-      const langVoice = voices.find((v) => v.lang.toLowerCase().startsWith(prefix.toLowerCase()))
-      if (langVoice) {
-        utterance.voice = langVoice
-      }
-
-      utterance.onstart = () => {
-        console.log('Speech Synthesis: Started speaking')
-        setIsSpeaking(true)
-      }
-      utterance.onend = () => {
-        console.log('Speech Synthesis: Finished speaking')
+      audio.onended = () => {
         setIsSpeaking(false)
+        URL.revokeObjectURL(url)
+        audioRef.current = null
       }
-      utterance.onerror = (err) => {
-        console.error('Speech Synthesis: onerror fired', err)
+      audio.onerror = () => {
         setIsSpeaking(false)
+        URL.revokeObjectURL(url)
+        audioRef.current = null
       }
 
-      synthRef.current.speak(utterance)
+      await audio.play()
     } catch (err) {
-      console.error('Speech Synthesis: Failed to speak:', err)
+      console.error('Piper TTS error:', err)
       setIsSpeaking(false)
     }
-  }, [speechEnabled, selectedLanguage])
+  }, [speechEnabled, API_URL])
 
   // Stop speaking
   const stopSpeaking = useCallback(() => {
-    if (synthRef.current) {
-      console.log('Speech Synthesis: calling cancel()')
-      synthRef.current.cancel()
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
     }
     setIsSpeaking(false)
   }, [])
@@ -384,8 +385,9 @@ export function useVoice() {
   const toggleSpeech = useCallback(() => {
     setSpeechEnabled((prev) => {
       if (prev) {
-        if (synthRef.current) {
-          synthRef.current.cancel()
+        if (audioRef.current) {
+          audioRef.current.pause()
+          audioRef.current = null
         }
         setIsSpeaking(false)
       }
@@ -416,4 +418,4 @@ export function useVoice() {
     setSelectedLanguage,
   }
 }
-
+
