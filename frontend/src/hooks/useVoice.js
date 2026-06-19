@@ -25,29 +25,14 @@ export function useVoice() {
 
   const recognitionRef = useRef(null)
   const isListeningRef = useRef(false)
-  const synthRef = useRef(null)
-const audioRef = useRef(null)
+  const audioRef = useRef(null)
 
-const API_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:8000"
-  // Initialize Speech Synthesis
+  const API_URL = import.meta.env.VITE_API_URL || ''
+
+  // Log TTS backend availability on mount
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      synthRef.current = window.speechSynthesis
-      console.log('Speech Synthesis: Initialized successfully.')
-      
-      const checkVoices = () => {
-        const voices = window.speechSynthesis.getVoices()
-        console.log(`Speech Synthesis: ${voices.length} voices available.`)
-      }
-      
-      checkVoices()
-      if (window.speechSynthesis.onvoiceschanged !== undefined) {
-        window.speechSynthesis.onvoiceschanged = checkVoices
-      }
-    } else {
-      console.warn('Speech Synthesis: Not supported in this browser.')
-    }
+    console.log('Speech Synthesis: Initialized successfully.')
+    console.log('Speech Synthesis: Using Piper TTS (Prabhat Hindi voice)')
   }, [])
 
   // Detect available microphones
@@ -322,7 +307,7 @@ const API_URL =
     }
   }, [])
 
-  // Speak AI Response via Piper TTS backend (Prabhat voice)
+  // Speak AI Response via Piper TTS backend (Prabhat Hindi voice)
   const speak = useCallback(async (text) => {
     if (!speechEnabled) return
 
@@ -331,29 +316,35 @@ const API_URL =
       audioRef.current = null
     }
 
-    const plainText = text.replace(/<[^>]*>/g, '').replace(/[*#]/g, '')
+    const plainText = text.replace(/<[^>]*>/g, '').replace(/[*#]/g, '').trim()
+    if (!plainText) return
+
     setIsSpeaking(true)
 
     try {
-      const response = await fetch(`${API_URL}/tts`, {
+      console.log('Speech Synthesis: Started speaking')
+
+      const res = await fetch(`${API_URL}/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: plainText }),
       })
 
-      if (!response.ok) throw new Error(`TTS request failed: ${response.status}`)
+      if (!res.ok) throw new Error(`TTS request failed: ${res.status}`)
 
-      const blob = await response.blob()
+      const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
       audioRef.current = audio
 
       audio.onended = () => {
+        console.log('Speech Synthesis: Finished speaking')
         setIsSpeaking(false)
         URL.revokeObjectURL(url)
         audioRef.current = null
       }
-      audio.onerror = () => {
+      audio.onerror = (err) => {
+        console.error('Speech Synthesis: onerror fired', err)
         setIsSpeaking(false)
         URL.revokeObjectURL(url)
         audioRef.current = null
@@ -361,7 +352,7 @@ const API_URL =
 
       await audio.play()
     } catch (err) {
-      console.error('Piper TTS error:', err)
+      console.error('Speech Synthesis: Failed to speak:', err)
       setIsSpeaking(false)
     }
   }, [speechEnabled, API_URL])
@@ -369,6 +360,7 @@ const API_URL =
   // Stop speaking
   const stopSpeaking = useCallback(() => {
     if (audioRef.current) {
+      console.log('Speech Synthesis: calling cancel()')
       audioRef.current.pause()
       audioRef.current = null
     }
@@ -418,4 +410,3 @@ const API_URL =
     setSelectedLanguage,
   }
 }
-

@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
@@ -9,7 +9,6 @@ import os
 
 from app.config import config
 from app.services.rag import rag_service
-from app.services.piper_service import generate_speech
 
 app = FastAPI(
     title=config.APP_NAME,
@@ -102,30 +101,17 @@ async def chat(request: ChatRequest):
 async def voice_query(request: ChatRequest):
     return await chat(request)
 
-# Piper TTS Endpoint
+# Piper TTS Endpoint (Prabhat Hindi voice)
 @app.post("/tts")
 async def tts(request: TTSRequest):
-
-    if not request.text.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="Text cannot be empty"
-        )
-
+    if not request.text or not request.text.strip():
+        raise HTTPException(status_code=400, detail="Text cannot be empty")
     try:
-        audio_path = generate_speech(request.text)
-
-        return FileResponse(
-            path=audio_path,
-            media_type="audio/wav",
-            filename="speech.wav"
-        )
-
+        from app.services.tts import synthesize
+        audio_bytes = synthesize(request.text.strip())
+        return Response(content=audio_bytes, media_type="audio/wav")
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)}")
 
 # Upload PDF
 @app.post("/upload-pdf")
