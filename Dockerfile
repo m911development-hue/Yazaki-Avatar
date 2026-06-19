@@ -32,14 +32,7 @@ RUN mkdir -p /app/voices \
     && echo "Model size: $(du -sh /app/voices/en_IN-prabhat-medium.onnx)"
 
 # Verify piper can import and load the voice at build time (catch errors early)
-RUN python -c "
-from piper import PiperVoice
-import os
-model = '/app/voices/en_IN-prabhat-medium.onnx'
-print(f'Model file size: {os.path.getsize(model)} bytes')
-voice = PiperVoice.load(model)
-print('Piper voice loaded successfully at build time')
-"
+RUN python -c "from piper import PiperVoice; import os; m='/app/voices/en_IN-prabhat-medium.onnx'; print('Model size:', os.path.getsize(m)); PiperVoice.load(m); print('Piper OK')"
 
 COPY backend/ .
 
