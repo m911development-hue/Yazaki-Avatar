@@ -20,17 +20,12 @@ RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTr
 # Pre-cache ChromaDB's built-in ONNX embedding model so startup doesn't download it
 RUN python -c "from chromadb.utils import embedding_functions; ef = embedding_functions.DefaultEmbeddingFunction(); ef(['warmup'])"
 
-# Download Piper hi_IN-prabhat-medium voice via huggingface_hub (handles URL resolution)
-RUN mkdir -p /app/voices && python -c "\
-from huggingface_hub import hf_hub_download; \
-import shutil, os; \
-base = 'hi/hi_IN/prabhat/medium/hi_IN-prabhat-medium'; \
-[shutil.copy(hf_hub_download('rhasspy/piper-voices', base+e), '/app/voices/hi_IN-prabhat-medium'+e) for e in ['.onnx', '.onnx.json']]; \
-print('Voice size:', os.path.getsize('/app/voices/hi_IN-prabhat-medium.onnx'), 'bytes') \
-"
+# Download Piper Prabhat voice — script lists the repo first so wrong names fail fast
+COPY backend/scripts/download_piper_voice.py /tmp/download_piper_voice.py
+RUN python /tmp/download_piper_voice.py
 
-# Verify piper loads the voice successfully at build time
-RUN python -c "from piper import PiperVoice; import os; v='/app/voices/hi_IN-prabhat-medium.onnx'; print('Size:',os.path.getsize(v),'bytes'); PiperVoice.load(v); print('Piper OK')"
+# Verify piper can load the downloaded voice before deployment
+RUN python -c "from piper import PiperVoice; import os; v=open('/app/voices/selected_voice.txt').read().strip(); p='/app/voices/'+v+'.onnx'; print('Loading',p,'(',os.path.getsize(p),'bytes)'); PiperVoice.load(p); print('Piper OK')"
 
 COPY backend/ .
 
