@@ -20,12 +20,26 @@ RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTr
 # Pre-cache ChromaDB's built-in ONNX embedding model so startup doesn't download it
 RUN python -c "from chromadb.utils import embedding_functions; ef = embedding_functions.DefaultEmbeddingFunction(); ef(['warmup'])"
 
-# Download Piper Prabhat (Hindi Indian) voice model
+# Download Piper en_IN-prabhat-medium voice model
+# --fail makes curl exit non-zero on HTTP errors (prevents saving HTML error pages as ONNX)
 RUN mkdir -p /app/voices \
-    && curl -L "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/hi/hi_IN/prabhat/medium/hi_IN-prabhat-medium.onnx" \
-         -o /app/voices/hi_IN-prabhat-medium.onnx \
-    && curl -L "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/hi/hi_IN/prabhat/medium/hi_IN-prabhat-medium.onnx.json" \
-         -o /app/voices/hi_IN-prabhat-medium.onnx.json
+    && curl -L --fail --show-error \
+         "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_IN/prabhat/medium/en_IN-prabhat-medium.onnx" \
+         -o /app/voices/en_IN-prabhat-medium.onnx \
+    && curl -L --fail --show-error \
+         "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_IN/prabhat/medium/en_IN-prabhat-medium.onnx.json" \
+         -o /app/voices/en_IN-prabhat-medium.onnx.json \
+    && echo "Model size: $(du -sh /app/voices/en_IN-prabhat-medium.onnx)"
+
+# Verify piper can import and load the voice at build time (catch errors early)
+RUN python -c "
+from piper import PiperVoice
+import os
+model = '/app/voices/en_IN-prabhat-medium.onnx'
+print(f'Model file size: {os.path.getsize(model)} bytes')
+voice = PiperVoice.load(model)
+print('Piper voice loaded successfully at build time')
+"
 
 COPY backend/ .
 
