@@ -4,7 +4,7 @@ import traceback
 import wave
 
 VOICE_DIR = os.environ.get("PIPER_VOICE_DIR", "/app/voices")
-VOICE_MODEL = os.path.join(VOICE_DIR, "en_IN-prabhat-medium.onnx")
+VOICE_MODEL = os.path.join(VOICE_DIR, "hi_IN-prabhat-medium.onnx")
 
 _voice = None
 
