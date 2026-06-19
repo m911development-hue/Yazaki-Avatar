@@ -17,6 +17,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
 
+# Pre-cache ChromaDB's built-in ONNX embedding model so startup doesn't download it
+RUN python -c "from chromadb.utils import embedding_functions; ef = embedding_functions.DefaultEmbeddingFunction(); ef(['warmup'])"
+
 # Download Piper Prabhat (Hindi Indian) voice model
 RUN mkdir -p /app/voices \
     && curl -L "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/hi/hi_IN/prabhat/medium/hi_IN-prabhat-medium.onnx" \
