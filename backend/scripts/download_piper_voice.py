@@ -30,20 +30,18 @@ if not all_files:
     print("[voice-dl] ERROR: could not list repo files")
     sys.exit(1)
 
-# Find any prabhat .onnx files
-prabhat = [f for f in all_files if "prabhat" in f.lower() and f.endswith(".onnx")]
-print(f"[voice-dl] Prabhat voices found: {prabhat}")
+# Use hi_IN-pratham-medium (natural male Hindi voice — prabhat doesn't exist in piper)
+TARGET = "hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx"
+matches = [f for f in all_files if f == TARGET]
+print(f"[voice-dl] Target voice found: {bool(matches)}")
 
-if not prabhat:
-    # Show what Indian-English / Hindi voices ARE available so we can pick one
+if not matches:
     indian = [f for f in all_files if ("hi_IN" in f or "en_IN" in f) and f.endswith(".onnx")]
     print(f"[voice-dl] Indian voices available: {indian}")
-    print("[voice-dl] ERROR: no prabhat voice found. Pick one from the list above.")
+    print("[voice-dl] ERROR: target voice not found.")
     sys.exit(1)
 
-# Prefer medium quality; take the first match
-medium = [f for f in prabhat if "medium" in f]
-voice_onnx = (medium or prabhat)[0]
+voice_onnx = matches[0]
 voice_json = voice_onnx + ".json"
 voice_name = os.path.basename(voice_onnx).replace(".onnx", "")
 
