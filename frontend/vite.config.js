@@ -13,6 +13,13 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      '/tts': { target: 'http://localhost:8000', changeOrigin: true },
+      '/tts-debug': { target: 'http://localhost:8000', changeOrigin: true },
+      '/chat': { target: 'http://localhost:8000', changeOrigin: true },
+      '/voice-query': { target: 'http://localhost:8000', changeOrigin: true },
+      '/health': { target: 'http://localhost:8000', changeOrigin: true },
+      '/upload-pdf': { target: 'http://localhost:8000', changeOrigin: true },
+      '/clear-knowledge-base': { target: 'http://localhost:8000', changeOrigin: true },
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,

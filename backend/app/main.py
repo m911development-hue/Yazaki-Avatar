@@ -101,43 +101,15 @@ async def chat(request: ChatRequest):
 async def voice_query(request: ChatRequest):
     return await chat(request)
 
-# TTS diagnostics — visit /tts-debug in browser to check voice status
-@app.get("/tts-debug")
-async def tts_debug():
-    import os
-    from app.services.tts import VOICE_DIR, VOICE_MODEL
-    info: dict = {
-        "voice_dir": VOICE_DIR,
-        "voice_model": VOICE_MODEL,
-        "model_exists": os.path.exists(VOICE_MODEL),
-        "model_size_bytes": os.path.getsize(VOICE_MODEL) if os.path.exists(VOICE_MODEL) else 0,
-        "voices_dir_contents": os.listdir(VOICE_DIR) if os.path.isdir(VOICE_DIR) else "DIR NOT FOUND",
-        "piper_import": "not tested",
-        "voice_load": "not tested",
-    }
-    try:
-        from piper import PiperVoice  # noqa: F401
-        info["piper_import"] = "ok"
-    except Exception as e:
-        info["piper_import"] = f"FAILED: {e}"
-        return info
-    try:
-        from app.services.tts import _get_voice
-        _get_voice()
-        info["voice_load"] = "ok"
-    except Exception as e:
-        info["voice_load"] = f"FAILED: {e}"
-    return info
-
-# Piper TTS Endpoint (Prabhat voice)
+# TTS Endpoint — en-IN-PrabhatNeural via edge-tts
 @app.post("/tts")
 async def tts(request: TTSRequest):
     if not request.text or not request.text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty")
     try:
         from app.services.tts import synthesize
-        audio_bytes = synthesize(request.text.strip())
-        return Response(content=audio_bytes, media_type="audio/wav")
+        audio_bytes = await synthesize(request.text.strip())
+        return Response(content=audio_bytes, media_type="audio/mpeg")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)}")
 
